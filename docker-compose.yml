@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: 10xai-hello-app
+    ports:
+      - "3000:3000" # Backend API
+      - "8080:8080" # Frontend dev server
+    volumes:
+      # Mount source code for development
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      # Preserve node_modules and stack work
+      - node_modules:/app/frontend/node_modules
+      - stack_work:/app/backend/.stack-work
+    environment:
+      - NODE_ENV=development
+    command: /app/start-dev.sh
+    stdin_open: true
+    tty: true
+
+  # Service for running tests only
+  test:
+    build: .
+    container_name: 10xai-hello-test
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - node_modules:/app/frontend/node_modules
+      - stack_work:/app/backend/.stack-work
+    command: /app/run-all-tests.sh
+
+volumes:
+  node_modules:
+  stack_work:
