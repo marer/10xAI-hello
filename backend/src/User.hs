@@ -35,10 +35,3 @@ data UserResponse = UserResponse
   , userResponseEmail :: String
   } deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
--- | Convert User to UserResponse
-toUserResponse :: User -> UserResponse
-toUserResponse user = UserResponse
-  { userResponseId = userId user
-  , userResponseName = userName user
-  , userResponseEmail = userEmail user
-  }

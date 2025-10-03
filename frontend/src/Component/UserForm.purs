@@ -3,7 +3,8 @@ module Component.UserForm where
 import Prelude
 
 import Api.UserApi (createUser, updateUser)
-import Data.User (UserId(..), CreateUserRequest)
+import Data.User (UserId(..), CreateUserRequest, UserResponse)
+import Data.Maybe (isJust)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -60,15 +61,6 @@ render state = HH.form
           [ HP.type_ HP.InputText
           , HP.value state.name
           , HE.onValueInput SetName
-          , HP.required true
-          ]
-      ]
-  , HH.div_
-      [ HH.label_ [ HH.text "Password:" ]
-      , HH.input
-          [ HP.type_ HP.InputPassword
-          , HP.value state.password
-          , HE.onValueInput SetPassword
           , HP.required true
           ]
       ]

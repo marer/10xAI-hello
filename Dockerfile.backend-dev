@@ -1,0 +1,54 @@
+# Dockerfile for backend development (Haskell with Stack)
+# This installs only backend dependencies, not the full application
+
+FROM ubuntu:24.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    # Basic utilities
+    curl \
+    wget \
+    git \
+    build-essential \
+    software-properties-common \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    # Development tools
+    vim \
+    nano \
+    zsh \
+    # Network tools
+    net-tools \
+    iputils-ping \
+    # Haskell dependencies
+    libffi-dev \
+    libgmp-dev \
+    zlib1g-dev \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Haskell Stack
+RUN curl -sSL https://get.haskellstack.org/ | sh
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files needed for dependency installation
+COPY backend/ /app/backend/
+
+# Install backend dependencies only
+WORKDIR /app/backend
+RUN stack setup
+RUN stack build --dependencies-only
+
+# Set working directory back to /app
+WORKDIR /app
+
+# Set default command
+CMD ["/bin/bash"]

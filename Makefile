@@ -27,10 +27,15 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Quick start:$(NC)"
-	@echo "  make install    # Install all dependencies"
-	@echo "  make build      # Build both backend and frontend"
-	@echo "  make test       # Run all tests"
-	@echo "  make dev        # Start development servers"
+	@echo "  make shell           # Enter Docker container with zsh shell (backend-focused)"
+	@echo "  make shell-backend   # Enter Docker container for backend development only"
+	@echo "  make shell-frontend  # Enter Docker container for frontend development only"
+	@echo "  make dev             # Start development servers in Docker"
+	@echo "  make dev-stop        # Stop development servers"
+	@echo "  make docker-build    # Build full Docker image with app"
+	@echo "  make install         # Install all dependencies"
+	@echo "  make build           # Build both backend and frontend"
+	@echo "  make test            # Run all tests"
 
 # =============================================================================
 # INSTALLATION TARGETS
@@ -122,47 +127,93 @@ test-all: test-backend test-frontend ## Run all tests with summary
 # DEVELOPMENT TARGETS
 # =============================================================================
 
-.PHONY: dev dev-backend dev-frontend dev-watch
-dev: ## Start development environment (both servers)
-	@echo "$(BLUE)🚀 Starting development environment...$(NC)"
+.PHONY: dev dev-backend dev-frontend dev-watch dev-stop
+dev: ## Start development environment (both servers in Docker)
+	@echo "$(BLUE)🚀 Starting development environment in Docker...$(NC)"
 	@echo "$(CYAN)=====================================$(NC)"
-	@echo "$(YELLOW)Starting backend server...$(NC)"
-	@cd $(BACKEND_DIR) && stack exec backend &
-	@echo "$(YELLOW)Starting frontend server...$(NC)"
-	@cd $(FRONTEND_DIR) && npm run serve &
+	@echo "$(YELLOW)Starting backend server in Docker...$(NC)"
+	@docker run -d --name backend-dev \
+		-v "$(PWD)/backend:/app/backend" \
+		-v stack_work:/app/backend/.stack-work \
+		-p $(BACKEND_PORT):$(BACKEND_PORT) \
+		--workdir /app/backend \
+		--user $(shell id -u):$(shell id -g) \
+		$(DOCKER_IMAGE):backend-dev \
+		sh -c "stack build --allow-different-user && stack exec backend" &
+	@echo "$(YELLOW)Starting frontend server in Docker...$(NC)"
+	@docker run -d --name frontend-dev \
+		-v "$(PWD)/frontend:/app/frontend" \
+		-v node_modules:/app/frontend/node_modules \
+		-p $(FRONTEND_PORT):$(FRONTEND_PORT) \
+		--workdir /app/frontend \
+		--user $(shell id -u):$(shell id -g) \
+		$(DOCKER_IMAGE):frontend-dev \
+		sh -c "spago build && spago bundle-app --main Main --to dist/app.js && npx http-server dist -p $(FRONTEND_PORT) -c-1" &
 	@echo ""
-	@echo "$(GREEN)✅ Development servers started!$(NC)"
+	@echo "$(GREEN)✅ Development servers started in Docker!$(NC)"
 	@echo "   Backend: http://localhost:$(BACKEND_PORT)"
 	@echo "   Frontend: http://localhost:$(FRONTEND_PORT)"
 	@echo ""
-	@echo "$(YELLOW)Press Ctrl+C to stop all servers$(NC)"
-	@wait
+	@echo "$(YELLOW)To stop servers: make dev-stop$(NC)"
+	@echo "$(YELLOW)To view logs: docker logs backend-dev or docker logs frontend-dev$(NC)"
 
-dev-backend: ## Start backend development server only
-	@echo "$(BLUE)🚀 Starting backend development server...$(NC)"
-	@cd $(BACKEND_DIR) && stack exec backend
+dev-backend: ## Start backend development server only in Docker
+	@echo "$(BLUE)🚀 Starting backend development server in Docker...$(NC)"
+	@docker run --rm \
+		-v "$(PWD)/backend:/app/backend" \
+		-v stack_work:/app/backend/.stack-work \
+		-p $(BACKEND_PORT):$(BACKEND_PORT) \
+		--workdir /app/backend \
+		--user $(shell id -u):$(shell id -g) \
+		$(DOCKER_IMAGE):backend-dev \
+		sh -c "stack build --allow-different-user && stack exec backend"
 
-dev-frontend: ## Start frontend development server only
-	@echo "$(BLUE)🚀 Starting frontend development server...$(NC)"
-	@cd $(FRONTEND_DIR) && npm run serve
+dev-frontend: ## Start frontend development server only in Docker
+	@echo "$(BLUE)🚀 Starting frontend development server in Docker...$(NC)"
+	@docker run --rm \
+		-v "$(PWD)/frontend:/app/frontend" \
+		-v node_modules:/app/frontend/node_modules \
+		-p $(FRONTEND_PORT):$(FRONTEND_PORT) \
+		--workdir /app/frontend \
+		--user $(shell id -u):$(shell id -g) \
+		$(DOCKER_IMAGE):frontend-dev \
+		sh -c "spago build && spago bundle-app --main Main --to dist/app.js && npx http-server dist -p $(FRONTEND_PORT) -c-1"
 
-dev-watch: ## Start development with file watching
-	@echo "$(BLUE)👀 Starting development with file watching...$(NC)"
+dev-stop: ## Stop development servers
+	@echo "$(BLUE)🛑 Stopping development servers...$(NC)"
+	@docker stop backend-dev frontend-dev 2>/dev/null || true
+	@docker rm backend-dev frontend-dev 2>/dev/null || true
+	@echo "$(GREEN)✅ Development servers stopped$(NC)"
+
+dev-watch: ## Start development with file watching in Docker
+	@echo "$(BLUE)👀 Starting development with file watching in Docker...$(NC)"
 	@echo "$(YELLOW)Backend will auto-rebuild on changes$(NC)"
 	@echo "$(YELLOW)Frontend will auto-rebuild on changes$(NC)"
-	@cd $(BACKEND_DIR) && stack build --file-watch &
-	@cd $(FRONTEND_DIR) && npm run dev &
-	@wait
+	@echo "$(YELLOW)Note: Use 'make shell' to enter container for interactive development$(NC)"
+	@echo "$(YELLOW)Then run 'stack build --file-watch' in backend/ and 'spago build --watch' in frontend/$(NC)"
 
 # =============================================================================
 # DOCKER TARGETS
 # =============================================================================
 
-.PHONY: docker-build docker-run docker-test docker-clean docker-push
-docker-build: ## Build Docker image
-	@echo "$(BLUE)🐳 Building Docker image...$(NC)"
+.PHONY: docker-build docker-dev-build docker-backend-dev docker-frontend-dev docker-run docker-test docker-clean docker-push
+docker-build: ## Build Docker image (with full app build)
+	@echo "$(BLUE)🐳 Building Docker image with full app...$(NC)"
 	@docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	@echo "$(GREEN)✅ Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)$(NC)"
+
+docker-dev-build: docker-backend-dev docker-frontend-dev ## Build both backend and frontend development images
+	@echo "$(GREEN)✅ All development images built$(NC)"
+
+docker-backend-dev: ## Build Docker image for backend development (dependencies only)
+	@echo "$(BLUE)🐳 Building Docker backend development image...$(NC)"
+	@docker build -f Dockerfile.backend-dev -t $(DOCKER_IMAGE):backend-dev .
+	@echo "$(GREEN)✅ Backend development image built: $(DOCKER_IMAGE):backend-dev$(NC)"
+
+docker-frontend-dev: ## Build Docker image for frontend development (dependencies only)
+	@echo "$(BLUE)🐳 Building Docker frontend development image...$(NC)"
+	@docker build -f Dockerfile.frontend-dev -t $(DOCKER_IMAGE):frontend-dev .
+	@echo "$(GREEN)✅ Frontend development image built: $(DOCKER_IMAGE):frontend-dev$(NC)"
 
 docker-run: ## Run application in Docker
 	@echo "$(BLUE)🐳 Running application in Docker...$(NC)"
@@ -185,6 +236,55 @@ docker-clean: ## Clean up Docker resources
 docker-push: ## Push Docker image to registry
 	@echo "$(BLUE)📤 Pushing Docker image...$(NC)"
 	@docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+shell: docker-backend-dev ## Enter Docker container with zsh shell for development (backend-focused)
+	@echo "$(BLUE)🐳 Starting Docker container with zsh shell...$(NC)"
+	@echo "$(YELLOW)This will mount your source code and provide a development environment$(NC)"
+	@echo "$(YELLOW)Backend dependencies are installed inside the container$(NC)"
+	@echo "$(YELLOW)You can build and test your app inside the container$(NC)"
+	@docker run -it --rm \
+		-v "$(PWD)/backend:/app/backend" \
+		-v "$(PWD)/frontend:/app/frontend" \
+		-v "$(PWD)/Makefile:/app/Makefile" \
+		-v "$(PWD)/docker-compose.yml:/app/docker-compose.yml" \
+		-v "$(PWD)/Dockerfile:/app/Dockerfile" \
+		-v "$(PWD)/Dockerfile.dev:/app/Dockerfile.dev" \
+		-v "$(PWD)/Dockerfile.backend-dev:/app/Dockerfile.backend-dev" \
+		-v "$(PWD)/Dockerfile.frontend-dev:/app/Dockerfile.frontend-dev" \
+		-v "$(PWD)/README.md:/app/README.md" \
+		-v "$(PWD)/MAKEFILE.md:/app/MAKEFILE.md" \
+		-v "$(PWD)/DOCKER.md:/app/DOCKER.md" \
+		-v node_modules:/app/frontend/node_modules \
+		-v stack_work:/app/backend/.stack-work \
+		-p $(BACKEND_PORT):$(BACKEND_PORT) \
+		-p $(FRONTEND_PORT):$(FRONTEND_PORT) \
+		--workdir /app \
+		$(DOCKER_IMAGE):backend-dev
+
+shell-backend: docker-backend-dev ## Enter Docker container with zsh shell for backend development only
+	@echo "$(BLUE)🐳 Starting Docker container for backend development...$(NC)"
+	@echo "$(YELLOW)Backend dependencies are installed inside the container$(NC)"
+	@docker run -it --rm \
+		-v "$(PWD)/backend:/app/backend" \
+		-v "$(PWD)/Makefile:/app/Makefile" \
+		-v "$(PWD)/Dockerfile.backend-dev:/app/Dockerfile.backend-dev" \
+		-v stack_work:/app/backend/.stack-work \
+		-p $(BACKEND_PORT):$(BACKEND_PORT) \
+		--workdir /app \
+		$(DOCKER_IMAGE):backend-dev
+
+shell-frontend: docker-frontend-dev ## Enter Docker container with zsh shell for frontend development only
+	@echo "$(BLUE)🐳 Starting Docker container for frontend development...$(NC)"
+	@echo "$(YELLOW)Frontend dependencies are installed inside the container$(NC)"
+	@docker run -it --rm \
+		-v "$(PWD)/frontend:/app/frontend" \
+		-v "$(PWD)/Makefile:/app/Makefile" \
+		-v "$(PWD)/Dockerfile.frontend-dev:/app/Dockerfile.frontend-dev" \
+		-v node_modules:/app/frontend/node_modules \
+		-p $(FRONTEND_PORT):$(FRONTEND_PORT) \
+		--workdir /app \
+		$(DOCKER_IMAGE):frontend-dev \
+		/bin/zsh
 
 # =============================================================================
 # DEPLOYMENT TARGETS

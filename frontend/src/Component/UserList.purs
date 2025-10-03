@@ -3,6 +3,7 @@ module Component.UserList where
 import Prelude
 
 import Api.UserApi (getUsers, deleteUser)
+import Data.Array (filter)
 import Data.User (UserResponse, UserId(..))
 import Halogen as H
 import Halogen.HTML as HH

@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
   # Development tools
   vim \
   nano \
+  zsh \
   # Network tools
   net-tools \
   iputils-ping \

@@ -11,7 +11,7 @@ module UserService
   , deleteUser
   ) where
 
-import User (User, UserId, CreateUserRequest, UserResponse, toUserResponse)
+import User (User(..), UserId, CreateUserRequest, UserResponse(..))
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.IO.Class (MonadIO)
 
@@ -39,25 +39,41 @@ class Monad m => UserService m where
 createUser :: UserServiceC m => CreateUserRequest -> m UserResponse
 createUser req = do
   user <- asks createUser' >>= ($ req)
-  return $ toUserResponse user
+  return $ UserResponse
+    { userResponseId = userId user
+    , userResponseName = userName user
+    , userResponseEmail = userEmail user
+    }
 
 -- | Get user by ID (high-level operation)
 getUserById :: UserServiceC m => UserId -> m (Maybe UserResponse)
 getUserById uid = do
   maybeUser <- asks getUserById' >>= ($ uid)
-  return $ fmap toUserResponse maybeUser
+  return $ fmap (\user -> UserResponse
+    { userResponseId = userId user
+    , userResponseName = userName user
+    , userResponseEmail = userEmail user
+    }) maybeUser
 
 -- | Get all users (high-level operation)
 getAllUsers :: UserServiceC m => m [UserResponse]
 getAllUsers = do
   users <- asks getAllUsers'
-  return $ map toUserResponse users
+  return $ map (\user -> UserResponse
+    { userResponseId = userId user
+    , userResponseName = userName user
+    , userResponseEmail = userEmail user
+    }) users
 
 -- | Update an existing user (high-level operation)
 updateUser :: UserServiceC m => UserId -> CreateUserRequest -> m (Maybe UserResponse)
 updateUser uid req = do
   maybeUser <- asks updateUser' >>= ($ uid) >>= ($ req)
-  return $ fmap toUserResponse maybeUser
+  return $ fmap (\user -> UserResponse
+    { userResponseId = userId user
+    , userResponseName = userName user
+    , userResponseEmail = userEmail user
+    }) maybeUser
 
 -- | Delete a user (high-level operation)
 deleteUser :: UserServiceC m => UserId -> m Bool
